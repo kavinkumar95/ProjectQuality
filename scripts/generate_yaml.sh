@@ -1,28 +1,11 @@
 #!/bin/bash
+docker cp "config.xls" "dataquality:/usr/src/app/config.xls"
 
-# Read the file line by line
-while IFS= read -r line; do
- # Extract the key and path
-  key=$(echo "$line" | cut -d ':' -f 1)
-  path=$(echo "$line" | cut -d ':' -f 2)
+docker cp "rule.xls" "dataquality:/usr/src/app/rule.xls"
 
+json_data='{"configFilePath":"'"config.xls"'","ruleFilePath":"'"rule.xls"'"}'
 
-  # Use the paths in a curl POST request
-  if [ $key == "CONFIG_PATH" ]; then
-    CONFIG_PATH=$path
-  elif [ $key == "RULE_PATH" ]; then
-    RULE_PATH=$path
-  fi
+# Step 2: Access the container and run curl
+docker exec -it "dataquality" /bin/bash -c "curl -X POST -H 'Content-Type: application/json' -d '$json_data' http://localhost:8082/api/quality/generateConfigYaml/ -o config.zip"
 
-
-
-done < path.txt
-
-# Construct JSON data
-json_data='{"configFilePath":"'"$CONFIG_PATH"'","ruleFilePath":"'"$RULE_PATH"'"}'
-
-
-curl -X POST -H "Content-Type: application/json" -d "$json_data" http://localhost:8082/api/quality/generateConfigYaml/ -o config.zip
-
-# Use the paths in a curl POST request with JSON data
-
+docker cp "dataquality:/usr/src/app//config.zip" "."
