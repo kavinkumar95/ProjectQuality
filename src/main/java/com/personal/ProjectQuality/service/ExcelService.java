@@ -134,8 +134,7 @@ public class ExcelService {
         List<Configuration> configData = readConfigXlsFile(path.getConfigFilePath());
         List<Check> rulesData = readRuleXlsFile(path.getRuleFilePath());
         Set<String> filenameSet = new HashSet<>();
-        filenameSet.addAll(formConfigurationYaml(configData));
-        filenameSet.addAll(formCheckYaml(rulesData));
+        filenameSet.addAll(formQualityCheck(rulesData,configData));
         zipFiles(filenameSet,"config.zip");
         Path zipPath = Paths.get("config.zip");
         Resource resource = new FileSystemResource(zipPath.toFile());
@@ -321,83 +320,187 @@ public class ExcelService {
         }
     }
 
-    private Set<String> formCheckYaml(List<Check> rulesData) throws IOException {
+    private Set<String> formQualityCheck(List<Check> rulesData,List<Configuration> configurationList) throws IOException {
         Set<String> fileNames = new HashSet<>();
-        Set<String> dataSourceSet = new HashSet<>();
-        for (Check rule : rulesData) {
-            BufferedWriter writer = new BufferedWriter(new FileWriter( rule.getDataSource()+ "_rules.yml", true));
-            String fileName = rule.getDataSource()+ "_rules.yml";
-            if(!dataSourceSet.contains(rule.getDataSource())){
-                dataSourceSet.add(rule.getDataSource());
-                writer.append("checks for " + rule.getTablename() + ":" + "\n");
+        Set<String> tablenameSet = new HashSet<>();
+        String tableName = "";
+        for(Configuration configuration : configurationList){
+            BufferedWriter writer = new BufferedWriter(new FileWriter( configuration.getDataSource()+ "_quality.py", true));
+            String fileName = configuration.getDataSource()+ "_quality.py";
+            String dataSource = configuration.getDataSource();
+            writer.append("import great_expectations as gx"+"\n");
+            writer.append("context = gx.get_context()"+"\n");
+            if(configuration.getType().equalsIgnoreCase("mysql")) {
+                writer.append("datasource = context.sources.add_sql(name=" +
+                        "\"" + configuration.getDataSource() + "\""
+                        + ", connection_string=" +
+                        "\"mysql+pymysql://" + configuration.getUsername()+":" + configuration.getPassword() + "@" + configuration.getHost() + ":" + configuration.getPort() + "/" + configuration.getDataSource() + "\"" +
+                        ")"+"\n");
             }
-            if(rule.getCheckRule().equalsIgnoreCase("FIRST_NAME") ||
-                    rule.getCheckRule().equalsIgnoreCase("LAST_NAME")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "valid regex: ^[A-Za-z0-9 ]+$"+ "\n");
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 50"+ "\n");
+            for (Check rule : rulesData) {
+                tableName = rule.getTablename();
+                if(dataSource.equalsIgnoreCase(rule.getDataSource())){
+                    if(!tablenameSet.contains(rule.getTablename().toLowerCase())){
+                        tablenameSet.add(rule.getTablename().toLowerCase());
+                        writer.append("table_asset_"+rule.getTablename().toLowerCase()+" = "+
+                                "datasource.add_table_asset(name="+"\""+rule.getTablename().toLowerCase()+"_asset"+"\""+", table_name="+
+                                "\""+rule.getTablename().toLowerCase()+"\")"+"\n");
+                        writer.append("data_asset_"+rule.getTablename().toLowerCase()+" = "+
+                                "context.get_datasource("+"\"" + configuration.getDataSource() + "\")"+
+                                ".get_asset("+"\""+rule.getTablename().toLowerCase()+"_asset"+"\""+")"+"\n");
+                        writer.append("batch_request_"+rule.getTablename().toLowerCase()+" = "+
+                                        "data_asset_"+rule.getTablename().toLowerCase()+".build_batch_request()"+"\n");
+                        writer.append("context.add_or_update_expectation_suite("+"\""+"expectation_suite_"+rule.getTablename().toLowerCase()+"\""+")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+" = context.get_validator(batch_request="+
+                                        "batch_request_"+rule.getTablename().toLowerCase()+",expectation_suite_name="+
+                                        "\""+"expectation_suite_"+rule.getTablename().toLowerCase()+"\""+",)"+"\n");
+                    }
+                    if (rule.getCheckRule().equalsIgnoreCase("FIRST_NAME")||
+                            rule.getCheckRule().equalsIgnoreCase("LAST_NAME")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                        ".expect_column_values_to_not_be_null(column="+
+                                        "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=50)"+
+                                "\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^[A-Za-z0-9 ]+$"+"\""+
+                                ")"+
+                                "\n");
+                    }else if (rule.getCheckRule().equalsIgnoreCase("FULL_NAME")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=500)"+
+                                "\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^[A-Za-z0-9 ]+$"+"\""+
+                                ")"+
+                                "\n");
+
+                    }else  if (rule.getCheckRule().equalsIgnoreCase("PASSPORT_NUMBER")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^[A-Za-z0-9]+$|^([A-Za-z]{1,2}[0-9]{6,9})$"+"\""+
+                                ")"+
+                                "\n");
+
+                    } else  if (rule.getCheckRule().equalsIgnoreCase("UAE_NATIONAL_ID")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^[0-9]+$"+"\""+
+                                ")"+
+                                "\n");
+                    }
+                    else  if (rule.getCheckRule().equalsIgnoreCase("EMAIL")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                ", min_value=1, max_value=256)"+
+                                "\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"+"\""+
+                                ")"+
+                                "\n");
+                    }
+                    else  if (rule.getCheckRule().equalsIgnoreCase("DATE_OF_BIRTH")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=11)"+
+                                "\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\\d{4}$"+"\""+
+                                ")"+
+                                "\n");
+
+                    }
+                    else  if (rule.getCheckRule().equalsIgnoreCase("PLACE_OF_BIRTH")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=50)"+
+                                "\n");
+                    }else  if (rule.getCheckRule().equalsIgnoreCase("RELIGION")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=50)"+
+                                "\n");
+
+                    }else  if (rule.getCheckRule().equalsIgnoreCase("LONGITUDE")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=50)"+
+                                "\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^(-?((180(\\.0{1,10})?)|((1[0-7]\\d)|(\\d{1,2}))(\\.\\d{1,10})?))$"+"\""+
+                                ")"+
+                                "\n");
+                    }else  if (rule.getCheckRule().equalsIgnoreCase("LATITUDE")){
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_not_be_null(column="+
+                                "\""+rule.getFieldName().toLowerCase()+"\")"+"\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_value_lengths_to_be_between("+
+                                "\""+rule.getFieldName().toLowerCase()+"\""+
+                                ", min_value=1, max_value=50)"+
+                                "\n");
+                        writer.append("validator_"+rule.getTablename().toLowerCase()+
+                                ".expect_column_values_to_match_regex("+
+                                "\""+rule.getFieldName().toLowerCase()+"\","+
+                                "\""+"^(-?((90(\\.0{1,10})?)|((\\d{1,2})|([1-8]\\d))(\\.\\d{1,10})?))$"+"\""+
+                                ")"+
+                                "\n");
+                    }
+
+                }
             }
-            if (rule.getCheckRule().equalsIgnoreCase("FULL_NAME")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "valid regex: ^[A-Za-z0-9 ]+$"+ "\n");
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 500"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("PASSPORT_NUMBER")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "valid regex: ^[A-Za-z0-9]+$|^([A-Za-z]{1,2}[0-9]{6,9})$"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("UAE_NATIONAL_ID")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "valid regex: ^[0-9]+$"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("UAE_NATIONAL_ID")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "valid regex: ^[0-9]+$"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("EMAIL")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "valid regex: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"+ "\n");
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 256"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("DATE_OF_BIRTH")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\\d{4}$"+ "\n");
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 11"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("PLACE_OF_BIRTH")){
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 50"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("RELIGION")){
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 50"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("LONGITUDE")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "^(-?((180(\\.0{1,10})?)|((1[0-7]\\d)|(\\d{1,2}))(\\.\\d{1,10})?))$"+ "\n");
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 50"+ "\n");
-            }
-            if (rule.getCheckRule().equalsIgnoreCase("LATITUDE")){
-                writer.append("   " + "- invalid_percent(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when != 0%"+ "\n");
-                writer.append("      " + "^(-?((90(\\.0{1,10})?)|((\\d{1,2})|([1-8]\\d))(\\.\\d{1,10})?))$"+ "\n");
-                writer.append("   " + "- max_length(" + rule.getFieldName() +"):"+ "\n");
-                writer.append("      " + "fail: when >= 50"+ "\n");
-                writer.flush();
-            }
+            writer.append("validator_"+tableName.toLowerCase()+".save_expectation_suite()"+ "\n");
+            writer.append("checkpoint = context.add_or_update_checkpoint(name=\"my_quickstart_checkpoint\", validator="+"validator_"+tableName.toLowerCase()+",)"+ "\n");
+            writer.append("checkpoint_result = checkpoint.run()"+ "\n");
+            writer.append("context.build_data_docs()"+ "\n");
+            writer.append("context.open_data_docs()"+ "\n");
+            writer.flush();
             fileNames.add(fileName);
             writer.close();
         }
@@ -408,7 +511,7 @@ public class ExcelService {
         Set<String> fileNames = new HashSet<>();
         for (Configuration configValues : configData) {
             BufferedWriter writer = new BufferedWriter(new FileWriter(configValues.getDataSource() +"_config" + ".yml",true));
-            String fileName = configValues.getDataSource()+"_config" + ".yml";
+            String fileName = configValues.getDataSource()+"_quality" + ".py";
             writer.append("soda_cloud:"+"\n");
             writer.append("   host: cloud.soda.io"+"\n");
             writer.append("   api_key_id: 4099c544-1dfe-4ba9-86fa-b5830cd67f97"+"\n");
