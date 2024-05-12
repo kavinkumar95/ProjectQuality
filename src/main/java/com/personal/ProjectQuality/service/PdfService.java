@@ -18,7 +18,10 @@ import com.personal.ProjectQuality.entity.QualityIndexTableInfo;
 import com.personal.ProjectQuality.repository.QualityIndexColumnRepository;
 import com.personal.ProjectQuality.repository.QualityIndexFailureInfoRepository;
 import com.personal.ProjectQuality.repository.QualityIndexTableRepository;
+import datahub.shaded.org.springframework.core.io.ResourceLoader;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.data.domain.PageRequest;
@@ -69,8 +72,9 @@ public class PdfService {
                             .setMargin(0) // Set margins to zero
                             .setBorder(null); // Remove border;
 
+                    Resource resource = new ClassPathResource("RGB_EN.png");
                     // Image
-                    try (InputStream in = Files.newInputStream(Paths.get("/Users/kavmuthusamy/Documents/Personal/ProjectQuality/src/main/resources/RGB_EN.png"))) {
+                    try (InputStream in = resource.getInputStream()) {
                         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                         byte[] bytes = new byte[4096];
                         int bytesRead;

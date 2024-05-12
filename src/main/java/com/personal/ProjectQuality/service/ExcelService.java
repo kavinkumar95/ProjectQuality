@@ -324,7 +324,7 @@ public class ExcelService {
                     writer.append("context = gx.get_context()" + "\n");
                     if (configuration.getType().equalsIgnoreCase("mysql")) {
                         writer.append("dataPlatform=\"mysql\"" + "\n");
-                        writer.append("url = f'http://localhost:8084/api/quality/processValidationResult/{dataPlatform}'" + "\n");
+                        writer.append("url = f'http://localhost:8084/api/publisher/processValidationResult/{dataPlatform}'" + "\n");
                         writer.append("datasource = context.sources.add_sql(name=" +
                                 "\"" + configuration.getDataSource() + "\""
                                 + ", connection_string=" +
