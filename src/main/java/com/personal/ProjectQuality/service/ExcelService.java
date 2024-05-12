@@ -393,5 +393,6 @@ public class ExcelService {
         for(ClientRuleMappingResponse clientRuleMappingResponse : clientRuleMappingResponseList){
             clientRuleMappingResponseMap.put(clientRuleMappingResponse.getRuleName(),clientRuleMappingResponse);
         }
+        return clientRuleMappingResponseMap;
     }
 }

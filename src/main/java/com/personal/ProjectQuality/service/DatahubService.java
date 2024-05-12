@@ -18,6 +18,7 @@ import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.URISyntaxException;
@@ -40,13 +41,17 @@ public class DatahubService {
 
     @Autowired
     QualityIndexFailureInfoRepository qualityIndexFailureInfoRepository;
+
+    @Value("${datahub.url}")
+    private String datahubRestliUrl;
+
     public void sendResulttoCatalog(String dataplatForm, ValidationResult validationResult) {
         DecimalFormat df = new DecimalFormat("#.##");
         String tagName = "DQI:";
         tagName = tagName + df.format(validationResult.getStatistics().getSuccess_percent());
         System.out.println(tagName);
         RestEmitter emitter = RestEmitter.create(b -> {
-            b.server("http://34.16.202.109:8080").customizeHttpAsyncClient(custom -> {
+            b.server(datahubRestliUrl +":8080").customizeHttpAsyncClient(custom -> {
                 custom.setMaxConnPerRoute(20).setMaxConnTotal(20).build();
             }).build();
         });
@@ -66,7 +71,7 @@ public class DatahubService {
         InstitutionalMemory institutionalMemory = new InstitutionalMemory();
         InstitutionalMemoryMetadataArray institutionalMemoryMetadataArray = new InstitutionalMemoryMetadataArray();
         InstitutionalMemoryMetadata institutionalMemoryMetadata = new InstitutionalMemoryMetadata();
-        Url url = new Url("http://localhost:8084/api/generate/pdf/"+dataplatForm+"/"+schemaName+"/"+tableName);
+        Url url = new Url(datahubRestliUrl+":8084/api/generate/pdf/"+dataplatForm+"/"+schemaName+"/"+tableName);
         institutionalMemoryMetadata.setUrl(url);
         institutionalMemoryMetadata.setDescription(tableName +" Quality Report");
         AuditStamp auditStamp = new AuditStamp();
