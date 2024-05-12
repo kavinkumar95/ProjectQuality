@@ -8,7 +8,7 @@ github_raw_url="https://raw.githubusercontent.com/kavinkumar95/ProjectQuality/ma
 destination_path="scripts.zip"
 
 # Use curl to download the zip file
-curl -k -H "Authorization: token $github_token" -LJO "$github_raw_url" -o "$destination_path"
+curl -k -H -LJO "$github_raw_url" -o "$destination_path"
 
 
 # Check if the download was successful
